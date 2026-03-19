@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Solid Adaptive 1440 - Patra Edition</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    :root {
+      --bg-color: #1a141a; 
+      --card-bg: rgba(28, 28, 31, 0.7);
+      --text-main: #ffffff;
+      --text-sub: #f0a3cc;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --accent-color: #00e5ff; 
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      background: url('251114_illustration_Patra_Black.png') no-repeat center center;
+      background-size: cover;
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column; /* 縦並びに変更 */
+      align-items: flex-start; /* 左寄せ */
+      justify-content: center;
+      padding-left: 5vw;
+      overflow: hidden;
+      position: relative;
+    }
+
+    body::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.2); 
+      z-index: 0;
+    }
+
+    /* 全体を包むコンテナ */
+    .container {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center; /* 時計と日数を中央で揃える */
+      gap: 20px; /* 時計とカウントダウンの隙間 */
+    }
+
+    .minute-dock {
+      position: relative;
+      width: min(360px, 40vw);
+      aspect-ratio: 1 / 1;
+    }
+
+    .minute-card {
+      position: absolute; inset: 0;
+      border-radius: 50%;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      display: grid;
+      place-items: center;
+      backdrop-filter: blur(4px);
+    }
+
+    /* カウントダウン表示エリア */
+    .exam-banner {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      backdrop-filter: blur(4px);
+      padding: 15px 30px;
+      border-radius: 12px;
+      text-align: center;
+      min-width: 200px;
+    }
+
+    .exam-label {
+      font-size: 12px;
+      color: var(--text-sub);
+      letter-spacing: 2px;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+
+    .exam-days {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--accent-color);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 以下、時計の内部パーツ設定 */
+    .labels { position: absolute; inset: 0; pointer-events: none; }
+    .label {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      background: rgba(25, 25, 28, 0.8);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .center { position: absolute; text-align: center; pointer-events: none; }
+    .remain { font-size: clamp(65px, 10vw, 92px); font-weight: 800; line-height: 1; }
+    .unit { font-size: 11px; margin-top: 8px; color: var(--text-sub); letter-spacing: 2px; text-transform: uppercase; }
+    svg { width: 100%; height: 100%; }
+    .track { fill: none; stroke: rgba(255, 255, 255, 0.04); stroke-width: 14; }
+    .remainPath { fill: none; stroke: var(--accent-color); stroke-width: 14; stroke-linecap: round; transition: stroke 1.5s ease; }
+    .ticks line { stroke: rgba(255, 255, 255, 0.15); }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="minute-dock">
+      <div class="minute-card">
+        <svg viewBox="0 0 200 200">
+          <g class="ticks" id="ticks"></g>
+          <circle class="track" cx="100" cy="100" r="78"></circle>
+          <path class="remainPath" id="remainPath"
+            d="M 100 22
+               A 78 78 0 1 1 100 178
+               A 78 78 0 1 1 100 22" />
+        </svg>
+        <div class="labels" id="labels"></div>
+        <div class="center">
+          <div>
+            <div class="remain" id="remain">----</div>
+            <div class="unit">Minutes Remaining</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="exam-banner">
+      <div class="exam-label">DAYS TO EXAM</div>
+      <div class="exam-days" id="examDays">--</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ★ 試験日を設定
+  const EXAM_DATE = new Date('2027-08-29'); 
+
+  const elRemain = document.getElementById('remain');
+  const elExamDays = document.getElementById('examDays');
+  const path = document.getElementById('remainPath');
+  const labelsEl = document.getElementById('labels');
+  const ticks = document.getElementById('ticks');
+  const C = path.getTotalLength();
+
+  function updateTheme(hour) {
+    let color = (hour >= 5 && hour < 16) ? "#00e5ff" : (hour >= 16 && hour < 20) ? "#ff9100" : "#f0a3cc";
+    document.documentElement.style.setProperty('--accent-color', color);
+  }
+
+  function renderLabels(){
+    labelsEl.innerHTML = '';
+    const w = labelsEl.offsetWidth, h = labelsEl.offsetHeight;
+    const cx = w / 2, cy = h / 2, r = Math.min(w, h) * 0.39;
+    for (let i = 0; i < 12; i++){
+      const value = 1440 - i * 120;
+      const angle = (i / 12) * 360; 
+      const rad = (angle - 90) * Math.PI / 180;
+      const d = document.createElement('div');
+      d.className = 'label';
+      d.textContent = value;
+      d.style.left = `${cx + r * Math.cos(rad)}px`;
+      d.style.top = `${cy + r * Math.sin(rad)}px`;
+      labelsEl.appendChild(d);
+    }
+  }
+
+  for (let h = 0; h < 24; h++) {
+    const angle = (h / 24) * 360;
+    const a = (angle - 90) * Math.PI / 180;
+    const rOuter = 92, rInner = h % 6 === 0 ? 78 : 86;
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", 100 + rInner * Math.cos(a));
+    line.setAttribute("y1", 100 + rInner * Math.sin(a));
+    line.setAttribute("x2", 100 + rOuter * Math.cos(a));
+    line.setAttribute("y2", 100 + rOuter * Math.sin(a));
+    line.setAttribute("stroke-width", h % 6 === 0 ? "2.5" : "1.5");
+    ticks.appendChild(line);
+  }
+
+  function tick(){
+    const now = new Date();
+    const minsSince = now.getHours() * 60 + now.getMinutes();
+    let remaining = 1440 - minsSince;
+    if (remaining <= 0) remaining = 1440;
+
+    elRemain.textContent = remaining;
+    updateTheme(now.getHours());
+
+    const frac = remaining / 1440;
+    path.style.strokeDasharray = `${C * frac} ${C * (1 - frac)}`;
+    path.style.strokeDashoffset = String(C * frac);
+
+    // カウントダウン計算
+    const diff = EXAM_DATE - now;
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    elExamDays.textContent = days > 0 ? `${days} Days` : (days === 0 ? "TODAY" : "FINISHED");
+  }
+
+  renderLabels();
+  tick();
+  setInterval(tick, 1000);
+  window.addEventListener('resize', () => requestAnimationFrame(renderLabels));
+})();
+</script>
+</body>
+</html>
